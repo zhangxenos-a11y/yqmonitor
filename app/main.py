@@ -1,4 +1,5 @@
 """舆情监测系统 — FastAPI 入口"""
+import json
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -10,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from . import __version__
 from .config import config
 from .db import execute, init_db, query, query_one
-from .push import send_test
+from .push import CHANNEL_FIELDS, CHANNEL_TYPES, get_channels, send_test
 from .scheduler import run_monitor, start
 from .security import hash_password, make_session, read_session, verify_password
 
@@ -46,6 +47,12 @@ def get_current_user(request: Request):
     user = query_one("SELECT * FROM users WHERE id=?", (uid,))
     if not user:
         raise HTTPException(status_code=401, detail="用户不存在")
+    return user
+
+
+def require_admin(user=Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="仅管理员可操作")
     return user
 
 
@@ -366,6 +373,173 @@ async def platforms(user=Depends(get_current_user)):
     from .search import known_platforms
 
     return {"platforms": known_platforms()}
+
+
+# ---------- 用户管理 ----------
+@app.get("/api/users")
+async def list_users(user=Depends(require_admin)):
+    rows = query("SELECT id, username, role, created_at FROM users ORDER BY id ASC")
+    return [dict(r) for r in rows]
+
+
+@app.post("/api/users")
+async def create_user(request: Request, user=Depends(require_admin)):
+    body = await request.json()
+    username = (body.get("username") or "").strip()
+    password = body.get("password") or ""
+    role = body.get("role") or "user"
+    if not username or not password:
+        raise HTTPException(status_code=400, detail="用户名和密码不能为空")
+    if role not in ("admin", "user"):
+        raise HTTPException(status_code=400, detail="角色必须是 admin 或 user")
+    if query_one("SELECT id FROM users WHERE username=?", (username,)):
+        raise HTTPException(status_code=400, detail="用户名已存在")
+    uid = execute(
+        "INSERT INTO users(username, password_hash, role) VALUES(?,?,?)",
+        (username, hash_password(password), role),
+    )
+    return {"id": uid}
+
+
+@app.put("/api/users/{uid}")
+async def update_user(uid: int, request: Request, user=Depends(require_admin)):
+    body = await request.json()
+    target = query_one("SELECT * FROM users WHERE id=?", (uid,))
+    if not target:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    username = (body.get("username") or "").strip() or target["username"]
+    role = body.get("role") or target["role"]
+    if role not in ("admin", "user"):
+        raise HTTPException(status_code=400, detail="角色必须是 admin 或 user")
+    if username != target["username"] and query_one("SELECT id FROM users WHERE username=?", (username,)):
+        raise HTTPException(status_code=400, detail="用户名已存在")
+    # 防止把最后一个管理员降级或改名导致无管理员
+    if target["role"] == "admin" and role != "admin":
+        if query_one("SELECT COUNT(*) AS c FROM users WHERE role='admin'")["c"] <= 1:
+            raise HTTPException(status_code=400, detail="至少保留一个管理员")
+    password = body.get("password") or ""
+    if password:
+        execute(
+            "UPDATE users SET username=?, role=?, password_hash=? WHERE id=?",
+            (username, role, hash_password(password), uid),
+        )
+    else:
+        execute("UPDATE users SET username=?, role=? WHERE id=?", (username, role, uid))
+    return {"ok": True}
+
+
+@app.delete("/api/users/{uid}")
+async def delete_user(uid: int, user=Depends(require_admin)):
+    if uid == user["id"]:
+        raise HTTPException(status_code=400, detail="不能删除当前登录账号")
+    target = query_one("SELECT * FROM users WHERE id=?", (uid,))
+    if not target:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    if target["role"] == "admin":
+        if query_one("SELECT COUNT(*) AS c FROM users WHERE role='admin'")["c"] <= 1:
+            raise HTTPException(status_code=400, detail="至少保留一个管理员")
+    execute("DELETE FROM users WHERE id=?", (uid,))
+    return {"ok": True}
+
+
+# ---------- 推送终端管理 ----------
+def _sync_wecom_bot(ctype: str, cfg: dict) -> None:
+    """企业微信智能机器人终端凭证同步到全局（供 bot_client 长连接使用），重启后生效。"""
+    if ctype != "wecom_bot":
+        return
+    config.WECOM_BOT_ID = cfg.get("bot_id", "")
+    config.WECOM_BOT_SECRET = cfg.get("secret", "")
+    execute(
+        "INSERT INTO settings(key,value) VALUES('wecom_bot_id',?) "
+        "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+        (config.WECOM_BOT_ID,),
+    )
+    execute(
+        "INSERT INTO settings(key,value) VALUES('wecom_bot_secret',?) "
+        "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+        (config.WECOM_BOT_SECRET,),
+    )
+
+
+@app.get("/api/channels")
+async def list_channels(user=Depends(require_admin)):
+    return get_channels()
+
+
+@app.get("/api/channel-types")
+async def channel_types(user=Depends(require_admin)):
+    return {"types": CHANNEL_TYPES, "fields": CHANNEL_FIELDS}
+
+
+@app.post("/api/channels")
+async def create_channel(request: Request, user=Depends(require_admin)):
+    body = await request.json()
+    name = (body.get("name") or "").strip()
+    ctype = body.get("type") or ""
+    if not name:
+        raise HTTPException(status_code=400, detail="终端名称不能为空")
+    if ctype not in CHANNEL_TYPES:
+        raise HTTPException(status_code=400, detail="未知终端类型")
+    cfg = body.get("config") or {}
+    min_level = (body.get("min_level") or "").strip()
+    cid = execute(
+        "INSERT INTO push_channels(name,type,config,enabled,min_level) VALUES(?,?,?,?,?)",
+        (name, ctype, json.dumps(cfg, ensure_ascii=False), 1 if body.get("enabled", True) else 0, min_level),
+    )
+    _sync_wecom_bot(ctype, cfg)
+    return {"id": cid}
+
+
+@app.put("/api/channels/{cid}")
+async def update_channel(cid: int, request: Request, user=Depends(require_admin)):
+    row = query_one("SELECT * FROM push_channels WHERE id=?", (cid,))
+    if not row:
+        raise HTTPException(status_code=404, detail="终端不存在")
+    body = await request.json()
+    name = (body.get("name") or "").strip() or row["name"]
+    ctype = body.get("type") or row["type"]
+    if ctype not in CHANNEL_TYPES:
+        raise HTTPException(status_code=400, detail="未知终端类型")
+    cfg = body.get("config") if "config" in body else json.loads(row["config"] or "{}")
+    min_level = (body.get("min_level") if "min_level" in body else row["min_level"] or "").strip()
+    execute(
+        "UPDATE push_channels SET name=?, type=?, config=?, min_level=? WHERE id=?",
+        (name, ctype, json.dumps(cfg, ensure_ascii=False), min_level, cid),
+    )
+    _sync_wecom_bot(ctype, cfg)
+    return {"ok": True}
+
+
+@app.delete("/api/channels/{cid}")
+async def delete_channel(cid: int, user=Depends(require_admin)):
+    execute("DELETE FROM push_channels WHERE id=?", (cid,))
+    return {"ok": True}
+
+
+@app.post("/api/channels/{cid}/toggle")
+async def toggle_channel(cid: int, user=Depends(require_admin)):
+    row = query_one("SELECT enabled FROM push_channels WHERE id=?", (cid,))
+    if not row:
+        raise HTTPException(status_code=404, detail="终端不存在")
+    new_val = 0 if row["enabled"] else 1
+    execute("UPDATE push_channels SET enabled=? WHERE id=?", (new_val, cid))
+    return {"enabled": new_val}
+
+
+@app.post("/api/channels/{cid}/test")
+async def test_channel(cid: int, user=Depends(require_admin)):
+    row = query_one("SELECT * FROM push_channels WHERE id=?", (cid,))
+    if not row:
+        raise HTTPException(status_code=404, detail="终端不存在")
+    from .push import send_to_channel
+
+    d = dict(row)
+    try:
+        d["config"] = json.loads(d.get("config") or "{}")
+    except Exception:  # noqa: BLE001
+        d["config"] = {}
+    res = send_to_channel(d, "✅ 舆情监测系统\n终端「%s」测试推送成功。" % d["name"], "舆情监测系统测试")
+    return res
 
 
 # ---------- 静态前端 ----------

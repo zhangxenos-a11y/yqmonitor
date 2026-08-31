@@ -30,6 +30,8 @@
         <button class="tab" data-view="keywords">关键词</button>
         <button class="tab" data-view="results">监测结果</button>
         <button class="tab" data-view="pushlog">推送记录</button>
+        <button class="tab" data-view="channels" id="tab-channels">推送终端</button>
+        <button class="tab" data-view="users" id="tab-users">用户</button>
         <button class="tab" data-view="settings">设置</button>
       </nav>
       <div class="userbox">
@@ -128,25 +130,79 @@
         </div>
       </section>
 
+      <!-- 推送终端 -->
+      <section id="view-channels" class="view hidden">
+        <div class="panel">
+          <h3>添加推送终端</h3>
+          <div class="field-row">
+            <label class="field">终端名称
+              <input id="ch-name" type="text" placeholder="如：飞书告警群 / 值班微信群" />
+            </label>
+            <label class="field">终端类型
+              <select id="ch-type"></select>
+            </label>
+          </div>
+          <div id="ch-fields" class="channel-fields"></div>
+          <div class="field-row">
+            <label class="field">最低推送级别（低于此级别不发，留空=全部）
+              <select id="ch-minlevel">
+                <option value="">全部</option>
+                <option value="一般">一般及以上</option>
+                <option value="较大">较大及以上</option>
+                <option value="重大">重大及以上</option>
+                <option value="特别重大">仅特别重大</option>
+              </select>
+            </label>
+            <div class="field ch-submit">
+              <button id="ch-add">添加终端</button>
+            </div>
+          </div>
+          <p class="hint" id="ch-msg"></p>
+        </div>
+        <div class="panel">
+          <h3>终端列表</h3>
+          <p class="hint">舆情会推送到所有「启用」的终端；「测试」可验证单个终端连通性。</p>
+          <table class="table" id="ch-table">
+            <thead><tr><th>名称</th><th>类型</th><th>状态</th><th>最低级别</th><th>操作</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 用户 -->
+      <section id="view-users" class="view hidden">
+        <div class="panel">
+          <h3>添加用户</h3>
+          <div class="field-row">
+            <label class="field">用户名
+              <input id="u-username" type="text" placeholder="登录名" autocomplete="off" />
+            </label>
+            <label class="field">初始密码
+              <input id="u-password" type="password" placeholder="初始密码" autocomplete="new-password" />
+            </label>
+            <label class="field">角色
+              <select id="u-role">
+                <option value="user">普通用户</option>
+                <option value="admin">管理员</option>
+              </select>
+            </label>
+            <div class="field ch-submit">
+              <button id="u-add">添加</button>
+            </div>
+          </div>
+          <p class="hint" id="u-msg"></p>
+        </div>
+        <div class="panel">
+          <h3>用户列表</h3>
+          <table class="table" id="u-table">
+            <thead><tr><th>用户名</th><th>角色</th><th>创建时间</th><th>操作</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
       <!-- 设置 -->
       <section id="view-settings" class="view hidden">
-        <div class="panel">
-          <h3>推送配置 · 智能机器人（你正在用）</h3>
-          <label class="field">Bot ID
-            <input id="s-bot-id" type="text" placeholder="aib..." />
-          </label>
-          <label class="field">Secret
-            <input id="s-bot-secret" type="password" placeholder="智能机器人 Secret" />
-          </label>
-          <p class="hint" id="bot-status">连接状态：加载中…</p>
-          <button id="test-push" class="secondary">发送测试推送</button>
-        </div>
-        <div class="panel">
-          <h3>推送配置 · 群机器人（备选，可不用）</h3>
-          <label class="field">企业微信群机器人 Key
-            <input id="s-wecom" type="text" placeholder="webhook URL 中 ?key= 之后的部分" />
-          </label>
-        </div>
         <div class="panel">
           <h3>情感分析配置</h3>
           <label class="field">DeepSeek API Key（留空则用规则词库）

@@ -21,10 +21,13 @@ function showLogin() {
   $("#app").classList.add("hidden");
   $("#login-view").classList.remove("hidden");
 }
-function showApp(username) {
+function showApp(username, role) {
   $("#login-view").classList.add("hidden");
   $("#app").classList.remove("hidden");
   $("#user-name").textContent = username;
+  // 推送终端 / 用户管理仅管理员可见
+  $("#tab-channels").classList.toggle("hidden", role !== "admin");
+  $("#tab-users").classList.toggle("hidden", role !== "admin");
 }
 
 $("#login-form").addEventListener("submit", async (e) => {
@@ -32,7 +35,7 @@ $("#login-form").addEventListener("submit", async (e) => {
   $("#login-error").textContent = "";
   try {
     const r = await api("/api/login", { method: "POST", body: { username: $("#login-username").value, password: $("#login-password").value } });
-    showApp(r.username);
+    showApp(r.username, r.role);
     refreshAll();
   } catch (err) {
     $("#login-error").textContent = "用户名或密码错误";
@@ -49,6 +52,8 @@ function switchView(name) {
   if (name === "keywords") loadKeywords();
   if (name === "results") loadResults();
   if (name === "pushlog") loadPushLog();
+  if (name === "channels") loadChannels();
+  if (name === "users") loadUsers();
   if (name === "settings") loadSettings();
 }
 
@@ -204,29 +209,12 @@ async function loadPushLog() {
 }
 
 // ---------- 设置 ----------
-async function loadBotStatus() {
-  try {
-    const c = await api("/api/wecom-chats");
-    if (!c.bot_configured) {
-      $("#bot-status").textContent = "连接状态：未配置 Bot ID/Secret";
-      return;
-    }
-    const conn = c.connected ? "已连接 ✓" : "连接中/未连接";
-    const chats = c.chats.length ? `已记录 ${c.chats.length} 个会话` : "还没收到会话（请在企业微信里给机器人发一句话）";
-    $("#bot-status").textContent = `连接状态：${conn}；${chats}`;
-  } catch (e) {
-    $("#bot-status").textContent = "连接状态：查询失败";
-  }
-}
 const PUSH_FIELD_OPTIONS = [
   ["title", "标题"], ["snippet", "摘要"], ["url", "链接"],
   ["platform", "平台"], ["sentiment", "倾向"], ["level", "级别"],
 ];
 async function loadSettings() {
   const s = await api("/api/settings");
-  $("#s-wecom").value = s.wecom_key || "";
-  $("#s-bot-id").value = s.wecom_bot_id || "";
-  $("#s-bot-secret").value = s.wecom_bot_secret || "";
   $("#s-deepseek").value = s.deepseek_key || "";
   $("#s-model").value = s.deepseek_model || "deepseek-chat";
   $("#s-interval").value = s.interval || 30;
@@ -251,15 +239,11 @@ async function loadSettings() {
   // 来源平台（内置 + 自动发现）
   const plats = await api("/api/platforms");
   $("#s-platforms").innerHTML = plats.platforms.map((p) => `<span class="tag tag-off">${esc(p)}</span>`).join("") || '<span class="empty">暂无</span>';
-  loadBotStatus();
 }
 $("#save-settings").addEventListener("click", async () => {
   const sources = [...$$("#s-sources input:checked")].map((i) => i.value);
   const push_fields = [...$$("#s-push-fields input:checked")].map((i) => i.value);
   await api("/api/settings", { method: "POST", body: {
-    wecom_key: $("#s-wecom").value.trim(),
-    wecom_bot_id: $("#s-bot-id").value.trim(),
-    wecom_bot_secret: $("#s-bot-secret").value.trim(),
     deepseek_key: $("#s-deepseek").value.trim(),
     deepseek_model: $("#s-model").value.trim(),
     interval: parseInt($("#s-interval").value) || 30,
@@ -278,11 +262,6 @@ $("#save-settings").addEventListener("click", async () => {
   setTimeout(() => ($("#settings-msg").textContent = ""), 2000);
   loadBotStatus();
 });
-$("#test-push").addEventListener("click", async () => {
-  $("#settings-msg").textContent = "发送中…";
-  const r = await api("/api/test-push", { method: "POST" });
-  $("#settings-msg").textContent = r.ok ? "推送成功 ✓" : "推送失败: " + (r.error || r.detail);
-});
 $("#run-now").addEventListener("click", async () => {
   $("#settings-msg").textContent = "监控执行中…（约需数十秒）";
   const r = await api("/api/run", { method: "POST" });
@@ -298,11 +277,160 @@ function refreshAll() {
   switchView("stats");
 }
 
+// ---------- 推送终端 ----------
+let CHANNEL_TYPES = {};
+let CHANNEL_FIELDS = {};
+let channelEditingId = null;
+
+async function loadChannelTypes() {
+  const r = await api("/api/channel-types");
+  CHANNEL_TYPES = r.types;
+  CHANNEL_FIELDS = r.fields;
+  $("#ch-type").innerHTML = Object.entries(r.types).map(([k, n]) => `<option value="${k}">${esc(n)}</option>`).join("");
+  renderChannelFields();
+}
+
+function renderChannelFields() {
+  const t = $("#ch-type").value;
+  const fields = CHANNEL_FIELDS[t] || [];
+  $("#ch-fields").innerHTML = fields.map(([key, label]) =>
+    `<label class="field">${esc(label)}
+       <input data-ch="${key}" type="text" placeholder="${esc(label)}" />
+     </label>`).join("");
+}
+
+$("#ch-type").addEventListener("change", renderChannelFields);
+
+async function loadChannels() {
+  await loadChannelTypes();
+  const list = await api("/api/channels");
+  $("#ch-table tbody").innerHTML = list.map((c) => {
+    const typeName = CHANNEL_TYPES[c.type] || c.type;
+    const minLv = c.min_level || "全部";
+    return `<tr>
+      <td>${esc(c.name)}</td>
+      <td>${esc(typeName)}</td>
+      <td><span class="tag ${c.enabled ? "tag-on" : "tag-off"}">${c.enabled ? "启用" : "停用"}</span></td>
+      <td>${esc(minLv)}</td>
+      <td class="row-actions">
+        <button class="secondary" onclick="testChannel(${c.id})">测试</button>
+        <button class="secondary" onclick="toggleChannel(${c.id})">${c.enabled ? "停用" : "启用"}</button>
+        <button class="secondary" onclick="editChannel(${c.id})">编辑</button>
+        <button class="secondary" onclick="delChannel(${c.id})">删除</button>
+      </td>
+    </tr>`;
+  }).join("") || '<tr><td colspan="5" class="empty">暂无推送终端，先添加一个</td></tr>';
+}
+
+function resetChannelForm() {
+  $("#ch-name").value = "";
+  $("#ch-minlevel").value = "";
+  channelEditingId = null;
+  $("#ch-add").textContent = "添加终端";
+  if (Object.keys(CHANNEL_TYPES).length) {
+    $("#ch-type").value = Object.keys(CHANNEL_TYPES)[0];
+    renderChannelFields();
+  }
+}
+
+$("#ch-add").addEventListener("click", async () => {
+  const name = $("#ch-name").value.trim();
+  if (!name) { $("#ch-msg").textContent = "请填写终端名称"; return; }
+  const type = $("#ch-type").value;
+  const config = {};
+  $$("#ch-fields input[data-ch]").forEach((i) => { if (i.value.trim()) config[i.dataset.ch] = i.value.trim(); });
+  const body = { name, type, config, min_level: $("#ch-minlevel").value };
+  try {
+    if (channelEditingId) {
+      await api(`/api/channels/${channelEditingId}`, { method: "PUT", body });
+      $("#ch-msg").textContent = "已保存 ✓";
+    } else {
+      await api("/api/channels", { method: "POST", body });
+      $("#ch-msg").textContent = "已添加 ✓";
+    }
+    resetChannelForm();
+    loadChannels();
+  } catch (e) {
+    $("#ch-msg").textContent = "操作失败";
+  }
+});
+
+async function testChannel(id) {
+  $("#ch-msg").textContent = "测试中…";
+  const r = await api(`/api/channels/${id}/test`, { method: "POST" });
+  $("#ch-msg").textContent = r.ok ? "测试成功 ✓" : "测试失败: " + (r.error || "未知错误");
+}
+async function toggleChannel(id) { await api(`/api/channels/${id}/toggle`, { method: "POST" }); loadChannels(); }
+async function delChannel(id) {
+  if (!confirm("删除该推送终端？")) return;
+  await api(`/api/channels/${id}`, { method: "DELETE" });
+  loadChannels();
+}
+async function editChannel(id) {
+  const list = await api("/api/channels");
+  const c = list.find((x) => x.id === id);
+  if (!c) return;
+  channelEditingId = id;
+  $("#ch-name").value = c.name;
+  $("#ch-type").value = c.type;
+  $("#ch-minlevel").value = c.min_level || "";
+  renderChannelFields();
+  $$("#ch-fields input[data-ch]").forEach((i) => { i.value = c.config[i.dataset.ch] || ""; });
+  $("#ch-add").textContent = "保存修改";
+}
+
+// ---------- 用户管理 ----------
+async function loadUsers() {
+  const list = await api("/api/users");
+  $("#u-table tbody").innerHTML = list.map((u) => `<tr>
+    <td>${esc(u.username)}</td>
+    <td>${u.role === "admin" ? '<span class="tag tag-on">管理员</span>' : '<span class="tag tag-off">普通用户</span>'}</td>
+    <td>${esc(u.created_at)}</td>
+    <td class="row-actions">
+      <button class="secondary" onclick="resetUserPwd(${u.id})">重置密码</button>
+      <button class="secondary" onclick="toggleUserRole(${u.id}, '${u.role}')">${u.role === "admin" ? "设为普通" : "设为管理员"}</button>
+      <button class="secondary" onclick="delUser(${u.id})">删除</button>
+    </td>
+  </tr>`).join("") || '<tr><td colspan="4" class="empty">暂无用户</td></tr>';
+}
+
+$("#u-add").addEventListener("click", async () => {
+  const username = $("#u-username").value.trim();
+  const password = $("#u-password").value;
+  const role = $("#u-role").value;
+  if (!username || !password) { $("#u-msg").textContent = "请填写用户名和密码"; return; }
+  try {
+    await api("/api/users", { method: "POST", body: { username, password, role } });
+    $("#u-username").value = ""; $("#u-password").value = "";
+    $("#u-msg").textContent = "已添加 ✓";
+    loadUsers();
+  } catch (e) {
+    $("#u-msg").textContent = "添加失败（用户名可能已存在）";
+  }
+});
+
+async function resetUserPwd(id) {
+  const pwd = prompt("为该用户设置新密码：");
+  if (!pwd) return;
+  await api(`/api/users/${id}`, { method: "PUT", body: { password: pwd } });
+  loadUsers();
+}
+async function toggleUserRole(id, cur) {
+  const role = cur === "admin" ? "user" : "admin";
+  try { await api(`/api/users/${id}`, { method: "PUT", body: { role } }); loadUsers(); }
+  catch (e) { alert("操作失败：至少保留一个管理员"); }
+}
+async function delUser(id) {
+  if (!confirm("删除该用户？")) return;
+  try { await api(`/api/users/${id}`, { method: "DELETE" }); loadUsers(); }
+  catch (e) { alert("删除失败：不能删除当前账号或最后一个管理员"); }
+}
+
 // 初始化
 (async () => {
   try {
     const me = await api("/api/me");
-    showApp(me.username);
+    showApp(me.username, me.role);
     refreshAll();
   } catch (e) {
     showLogin();

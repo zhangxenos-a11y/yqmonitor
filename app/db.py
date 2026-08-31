@@ -62,6 +62,16 @@ CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT
 );
+
+CREATE TABLE IF NOT EXISTS push_channels (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    type TEXT NOT NULL,
+    config TEXT DEFAULT '{}',
+    enabled INTEGER DEFAULT 1,
+    min_level TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now','localtime'))
+);
 """
 
 
