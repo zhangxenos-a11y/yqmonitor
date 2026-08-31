@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>舆情监测系统</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <!-- 登录页 -->
+  <div id="login-view" class="login-wrap hidden">
+    <div class="login-card">
+      <h1>舆情监测系统</h1>
+      <p class="sub">关键词全网监控 · 情感分类 · 企业微信推送</p>
+      <form id="login-form">
+        <input id="login-username" type="text" placeholder="用户名" autocomplete="username" />
+        <input id="login-password" type="password" placeholder="密码" autocomplete="current-password" />
+        <button type="submit">登 录</button>
+        <p id="login-error" class="error"></p>
+      </form>
+    </div>
+  </div>
+
+  <!-- 主界面 -->
+  <div id="app" class="hidden">
+    <header class="topbar">
+      <div class="brand">📡 舆情监测系统</div>
+      <nav class="tabs">
+        <button class="tab active" data-view="stats">概览</button>
+        <button class="tab" data-view="keywords">关键词</button>
+        <button class="tab" data-view="results">监测结果</button>
+        <button class="tab" data-view="pushlog">推送记录</button>
+        <button class="tab" data-view="settings">设置</button>
+      </nav>
+      <div class="userbox">
+        <span id="user-name"></span>
+        <button id="logout-btn" class="link-btn">退出</button>
+      </div>
+    </header>
+
+    <main class="container">
+      <!-- 概览 -->
+      <section id="view-stats" class="view">
+        <div class="cards">
+          <div class="card"><div class="card-label">监测总量</div><div class="card-num" id="stat-total">0</div></div>
+          <div class="card clickable" id="card-negative" title="点击查看负面详情">
+            <div class="card-label">负面舆情 ▸</div>
+            <div class="card-num neg" id="stat-negative">0</div>
+          </div>
+          <div class="card"><div class="card-label">关键词数</div><div class="card-num" id="stat-keywords">0</div></div>
+        </div>
+        <div class="grid-2">
+          <div class="panel">
+            <h3>情感分布</h3>
+            <div id="sentiment-bars"></div>
+          </div>
+          <div class="panel">
+            <h3>来源平台 TOP10</h3>
+            <div id="platform-bars"></div>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>最新发现</h3>
+          <div id="recent-list"></div>
+        </div>
+      </section>
+
+      <!-- 关键词 -->
+      <section id="view-keywords" class="view hidden">
+        <div class="panel">
+          <h3>添加关键词</h3>
+          <form id="kw-form" class="inline-form">
+            <input id="kw-input" type="text" placeholder="输入关键词，如：学校名称 / 校长 / 某事件" />
+            <button type="submit">添加</button>
+          </form>
+          <p class="hint">留空监控源 = 使用全部已启用源；可在「设置」中配置启用源。</p>
+        </div>
+        <div class="panel">
+          <h3>关键词列表</h3>
+          <table class="table" id="kw-table">
+            <thead><tr><th>关键词</th><th>状态</th><th>监控源</th><th>创建时间</th><th>操作</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 监测结果 -->
+      <section id="view-results" class="view hidden">
+        <div class="panel">
+          <div class="filters">
+            <select id="f-keyword"><option value="">全部关键词</option></select>
+            <select id="f-sentiment">
+              <option value="">全部倾向</option>
+              <option value="正面">正面</option>
+              <option value="负面">负面</option>
+              <option value="中性">中性</option>
+            </select>
+            <select id="f-platform"><option value="">全部平台</option></select>
+            <select id="f-pushed">
+              <option value="-1">全部推送状态</option>
+              <option value="1">已推送</option>
+              <option value="0">未推送</option>
+            </select>
+            <input id="f-q" type="text" placeholder="搜索标题/摘要" />
+            <button id="f-apply">筛选</button>
+          </div>
+          <table class="table" id="res-table">
+            <thead><tr><th>发现时间</th><th>关键词</th><th>倾向</th><th>平台</th><th>级别</th><th>推送</th><th>内容</th></tr></thead>
+            <tbody></tbody>
+          </table>
+          <div class="pager">
+            <button id="prev-page">上一页</button>
+            <span id="page-info"></span>
+            <button id="next-page">下一页</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- 推送记录 -->
+      <section id="view-pushlog" class="view hidden">
+        <div class="panel">
+          <h3>推送记录</h3>
+          <p class="hint">每条记录下方列出本次实际推送到企业微信的舆情内容（含链接、倾向、平台），可随时回溯查询。</p>
+          <table class="table" id="log-table">
+            <thead><tr><th>时间</th><th>关键词</th><th>渠道</th><th>状态</th><th>推送的舆情内容</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 设置 -->
+      <section id="view-settings" class="view hidden">
+        <div class="panel">
+          <h3>推送配置 · 智能机器人（你正在用）</h3>
+          <label class="field">Bot ID
+            <input id="s-bot-id" type="text" placeholder="aib..." />
+          </label>
+          <label class="field">Secret
+            <input id="s-bot-secret" type="password" placeholder="智能机器人 Secret" />
+          </label>
+          <p class="hint" id="bot-status">连接状态：加载中…</p>
+          <button id="test-push" class="secondary">发送测试推送</button>
+        </div>
+        <div class="panel">
+          <h3>推送配置 · 群机器人（备选，可不用）</h3>
+          <label class="field">企业微信群机器人 Key
+            <input id="s-wecom" type="text" placeholder="webhook URL 中 ?key= 之后的部分" />
+          </label>
+        </div>
+        <div class="panel">
+          <h3>情感分析配置</h3>
+          <label class="field">DeepSeek API Key（留空则用规则词库）
+            <input id="s-deepseek" type="password" placeholder="sk-..." />
+          </label>
+          <label class="field">模型
+            <input id="s-model" type="text" value="deepseek-chat" />
+          </label>
+        </div>
+        <div class="panel">
+          <h3>推送配置</h3>
+          <label class="field">推送模式
+            <select id="s-push-mode">
+              <option value="realtime">实时推送</option>
+              <option value="scheduled">定时汇总</option>
+              <option value="both">两者都要</option>
+            </select>
+          </label>
+          <label class="field">定时汇总时间（每天 HH:MM）
+            <input id="s-push-time" type="text" placeholder="09:00" />
+          </label>
+          <div class="field-row">
+            <label class="field">实时推送窗口起
+              <input id="s-push-wstart" type="text" placeholder="08:00（留空不限）" />
+            </label>
+            <label class="field">实时推送窗口止
+              <input id="s-push-wend" type="text" placeholder="20:00（留空不限）" />
+            </label>
+          </div>
+          <label class="field">推送内容字段（勾选显示）
+            <div id="s-push-fields" class="checkbox-group"></div>
+          </label>
+          <div class="field-row">
+            <label class="field">每批条数
+              <input id="s-push-batch" type="number" min="1" value="5" />
+            </label>
+            <label class="field">最低推送级别（低于此级别不推）
+              <select id="s-push-minlevel">
+                <option value="">全部推送</option>
+                <option value="一般">一般及以上</option>
+                <option value="较大">较大及以上</option>
+                <option value="重大">重大及以上</option>
+                <option value="特别重大">仅特别重大</option>
+              </select>
+            </label>
+          </div>
+          <button id="digest-now" class="secondary">立即执行定时汇总推送</button>
+        </div>
+        <div class="panel">
+          <h3>监控源 & 频率</h3>
+          <div id="s-sources" class="checkbox-group"></div>
+          <label class="field">轮询间隔（分钟）
+            <input id="s-interval" type="number" min="1" />
+          </label>
+          <button id="run-now" class="secondary">立即执行一轮监控</button>
+        </div>
+        <div class="panel">
+          <button id="save-settings">保存设置</button>
+          <span id="settings-msg" class="msg"></span>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

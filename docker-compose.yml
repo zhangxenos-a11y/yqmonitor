@@ -1,0 +1,10 @@
+services:
+  yqmonitor:
+    build: .
+    container_name: yqmonitor
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./instance:/app/instance
+      - ./.env:/app/.env:ro
+    restart: unless-stopped

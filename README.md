@@ -1,0 +1,100 @@
+# 舆情监测系统
+
+关键词全网监控平台：设置关键词 → 定时聚合搜索 → 自动情感分类（正面/负面/中性）→ 人工标注舆情级别（政府四级）→ 企业微信机器人推送。
+
+## 功能
+
+- **关键词管理**：任意多个关键词，独立启用/停用。
+- **全网监控**：聚合百度、必应、搜狗微信、微博、头条搜索等公开搜索源。
+- **平台识别**：按链接域名自动识别内容所属平台（今日头条 / 抖音 / 微信 / 小红书 / 微博 / 知乎 等）。
+- **情感分类**：DeepSeek 批量判断正面/负面/中性，无 Key 时自动退化为规则词库。
+- **舆情级别标注**（1.2）：人工按政府标准四级（一般 / 较大 / 重大 / 特别重大）标注，支持按级别过滤推送。
+- **推送自定义**（1.2）：推送模式（实时 / 定时汇总 / 两者）、时间窗口、模板字段开关、每批条数、最低推送级别均可后端配置。
+- **推送**：触发新内容后，通过企业微信机器人推送（含倾向、平台、级别、标题、链接）。
+- **去重**：按「关键词 + URL 哈希」去重，同一链接只推送一次。
+- **Web 控制台**：概览统计、结果检索、级别标注、推送记录、设置，单页响应式。
+
+## 技术栈
+
+Python + FastAPI + SQLite + APScheduler + DeepSeek + 企业微信 webhook，Docker 可部署。
+
+## 快速开始
+
+### 1. 安装依赖
+
+```bash
+cd 舆情监测系统
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+# 国内加速：
+# pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+```
+
+### 2. 配置
+
+```bash
+cp .env.example .env
+```
+
+编辑 `.env`，填写：
+
+| 变量 | 说明 |
+|---|---|
+| `SECRET_KEY` | 会话签名密钥，改成随机长字符串 |
+| `DEEPSEEK_API_KEY` | DeepSeek 情感分析 Key（可留空，用规则词库） |
+| `WECOM_WEBHOOK_KEY` | 企业微信机器人 webhook 的 key |
+| `WECOM_BOT_ID` / `WECOM_BOT_SECRET` | 企业微信「智能机器人」凭证（WebSocket 长连接，推荐） |
+| `MONITOR_INTERVAL_MINUTES` | 监控轮询间隔，默认 30 分钟 |
+| `PUSH_MODE` | 推送模式：realtime / scheduled / both |
+| `PUSH_TIME` | 定时汇总的每日推送时间 HH:MM |
+| `PUSH_WINDOW_START` / `PUSH_WINDOW_END` | 实时推送时间窗口（留空不限） |
+| `PUSH_FIELDS` | 推送内容字段（title/snippet/url/platform/sentiment/level） |
+| `PUSH_BATCH_SIZE` | 每次推送最多条数 |
+| `PUSH_MIN_LEVEL` | 最低推送级别（一般/较大/重大/特别重大，空=全部） |
+
+> 企业微信机器人：在企业微信群 → 右键添加「群机器人」→ 复制 webhook URL，取 `?key=` 之后的部分。也可在网页「设置」页直接填。
+
+### 3. 启动
+
+```bash
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+浏览器打开 <http://localhost:8000>，默认账号 **admin / admin123**（首次登录后请改密）。
+
+### 4. Docker 部署
+
+```bash
+docker compose up -d --build
+```
+
+## 使用流程
+
+1. 「设置」页填写企业微信机器人 Key、DeepSeek Key，保存，点「发送测试推送」验证。
+2. 「关键词」页添加关键词（如学校名称、校长姓名、某事件）。
+3. 系统按间隔自动监控，新发现会在「监测结果」中展示并推送到企业微信群。
+4. 可在「设置」页点「立即执行一轮监控」手动触发。
+
+## 重要说明（务必阅读）
+
+- **抖音 / 微信 / 小红书无公开 API**。本系统通过搜索引擎收录内容**间接**覆盖这些平台（如百度/必应收录的小红书笔记、微信公众号文章、今日头条文章），并依据 URL 域名标注平台。**站内未收录的内容无法获取**。
+- 各搜索源均为「尽力而为」：百度/必应较稳定；搜狗微信、微博、头条可能因反爬/验证码返回空结果。单源失败不影响其它源，可在日志中查看。
+- 搜索引擎反爬策略会变化，抓取解析器可能需要随平台改版而调整。
+- 请遵守目标平台服务条款与 robots 协议，控制抓取频率，仅用于正当舆情监测场景。
+- 定期备份 `instance/yqmonitor.db`（含全部关键词、结果与设置）。
+
+## 目录结构
+
+```
+app/
+  main.py        # FastAPI 入口 + 路由 + 认证
+  config.py      # 配置加载
+  db.py          # SQLite 数据层
+  security.py    # 密码哈希 + 会话签名
+  search.py      # 搜索引擎聚合 + 平台识别
+  sentiment.py   # 情感分类（DeepSeek + 词库兜底）
+  levels.py      # 舆情级别定义（政府四级）
+  push.py        # 企业微信推送
+  scheduler.py   # 定时调度（监控 + 定时汇总）
+static/          # Web 前端
+```
