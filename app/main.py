@@ -270,6 +270,9 @@ async def get_settings(user=Depends(get_current_user)):
         "push_fields": [x for x in (s.get("push_fields", ",".join(config.PUSH_FIELDS)).split(",")) if x],
         "push_batch_size": int(s.get("push_batch_size", config.PUSH_BATCH_SIZE)),
         "push_min_level": s.get("push_min_level", config.PUSH_MIN_LEVEL),
+        # 扫描时间窗口
+        "scan_window_start": s.get("scan_window_start", config.SCAN_WINDOW_START),
+        "scan_window_end": s.get("scan_window_end", config.SCAN_WINDOW_END),
     }
 
 
@@ -277,7 +280,8 @@ async def get_settings(user=Depends(get_current_user)):
 async def save_settings(request: Request, user=Depends(get_current_user)):
     body = await request.json()
     for key in ("wecom_key", "wecom_bot_id", "wecom_bot_secret", "deepseek_key", "deepseek_model", "interval", "sources",
-                "push_mode", "push_time", "push_window_start", "push_window_end", "push_fields", "push_batch_size", "push_min_level"):
+                "push_mode", "push_time", "push_window_start", "push_window_end", "push_fields", "push_batch_size", "push_min_level",
+                "scan_window_start", "scan_window_end"):
         if key in body:
             val = body[key]
             if isinstance(val, list):
@@ -301,6 +305,8 @@ async def save_settings(request: Request, user=Depends(get_current_user)):
     config.PUSH_FIELDS = [x for x in m.get("push_fields", ",".join(config.PUSH_FIELDS)).split(",") if x]
     config.PUSH_BATCH_SIZE = int(m.get("push_batch_size", config.PUSH_BATCH_SIZE))
     config.PUSH_MIN_LEVEL = m.get("push_min_level", config.PUSH_MIN_LEVEL)
+    config.SCAN_WINDOW_START = m.get("scan_window_start", "")
+    config.SCAN_WINDOW_END = m.get("scan_window_end", "")
     # 间隔变更即时生效
     from .scheduler import reschedule, reschedule_digest
 

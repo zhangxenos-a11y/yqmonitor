@@ -47,8 +47,28 @@ def _within_window() -> bool:
     return now <= end
 
 
+def _within_scan_window() -> bool:
+    """判断当前时间是否在扫描时间窗口内。窗口为空=全天扫描。"""
+    start = (config.SCAN_WINDOW_START or "").strip()
+    end = (config.SCAN_WINDOW_END or "").strip()
+    if not start and not end:
+        return True
+    now = datetime.now().strftime("%H:%M")
+    if start and end:
+        if start <= end:
+            return start <= now <= end
+        return now >= start or now <= end  # 跨天窗口
+    if start:
+        return now >= start
+    return now <= end
+
+
 def run_monitor() -> dict:
     """执行一轮监控。返回统计摘要。"""
+    if not _within_scan_window():
+        log.info("当前不在扫描时间窗口内，跳过本轮扫描")
+        return {"keywords": 0, "found": 0, "pushed": 0, "errors": 0, "skipped": "扫描窗口外"}
+
     keywords = query("SELECT * FROM keywords WHERE enabled=1")
     summary = {"keywords": len(keywords), "found": 0, "pushed": 0, "errors": 0}
     log.info("开始监控，关键词数=%d", len(keywords))

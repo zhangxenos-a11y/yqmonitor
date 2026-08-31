@@ -237,6 +237,8 @@ async function loadSettings() {
   $("#s-push-wend").value = s.push_window_end || "";
   $("#s-push-batch").value = s.push_batch_size || 5;
   $("#s-push-minlevel").value = s.push_min_level || "";
+  $("#s-scan-wstart").value = s.scan_window_start || "";
+  $("#s-scan-wend").value = s.scan_window_end || "";
   const pf = new Set(s.push_fields);
   $("#s-push-fields").innerHTML = PUSH_FIELD_OPTIONS.map(([k, name]) =>
     `<label><input type="checkbox" value="${k}" ${pf.has(k) ? "checked" : ""} /> ${name}</label>`
@@ -266,6 +268,8 @@ $("#save-settings").addEventListener("click", async () => {
     push_fields,
     push_batch_size: parseInt($("#s-push-batch").value) || 5,
     push_min_level: $("#s-push-minlevel").value,
+    scan_window_start: $("#s-scan-wstart").value.trim(),
+    scan_window_end: $("#s-scan-wend").value.trim(),
   }});
   $("#settings-msg").textContent = "已保存 ✓";
   setTimeout(() => ($("#settings-msg").textContent = ""), 2000);

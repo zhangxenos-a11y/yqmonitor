@@ -201,6 +201,15 @@
           <label class="field">轮询间隔（分钟）
             <input id="s-interval" type="number" min="1" />
           </label>
+          <div class="field-row">
+            <label class="field">扫描时间窗口起（留空=全天）
+              <input id="s-scan-wstart" type="text" placeholder="08:00" />
+            </label>
+            <label class="field">扫描时间窗口止（留空=全天）
+              <input id="s-scan-wend" type="text" placeholder="22:00" />
+            </label>
+          </div>
+          <p class="hint">设置后仅在窗口内自动扫描，窗口外跳过；「立即执行」不受窗口限制。</p>
           <button id="run-now" class="secondary">立即执行一轮监控</button>
         </div>
         <div class="panel">

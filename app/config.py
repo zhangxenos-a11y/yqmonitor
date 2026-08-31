@@ -47,6 +47,10 @@ class Config:
     ]
     REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "10"))
 
+    # 扫描时间窗口（1.2.1）：只在窗口内执行抓取扫描，窗口外跳过，空=全天扫描
+    SCAN_WINDOW_START = os.getenv("SCAN_WINDOW_START", "")
+    SCAN_WINDOW_END = os.getenv("SCAN_WINDOW_END", "")
+
     # 推送配置（运行时可被「设置」页覆盖）
     PUSH_MODE = os.getenv("PUSH_MODE", "realtime")  # realtime / scheduled / both
     PUSH_TIME = os.getenv("PUSH_TIME", "09:00")     # 定时汇总的每日推送时间 HH:MM
