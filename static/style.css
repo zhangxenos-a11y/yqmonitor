@@ -94,6 +94,8 @@ body {
 .checkbox-group { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 14px; }
 .checkbox-group label { display: flex; align-items: center; gap: 6px; font-size: 13px; }
 .level-select { margin-left: 6px; padding: 2px 4px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; background: #fff; color: var(--text); }
+.platform-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.platform-list .tag { cursor: default; }
 
 button { padding: 10px 18px; background: var(--accent); color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; }
 button.secondary { background: #fff; color: var(--accent); border: 1px solid var(--accent); }

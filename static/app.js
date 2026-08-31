@@ -248,6 +248,9 @@ async function loadSettings() {
   $("#s-sources").innerHTML = Object.entries(sources).map(([k, name]) =>
     `<label><input type="checkbox" value="${k}" ${enabled.has(k) ? "checked" : ""} /> ${esc(name)}</label>`
   ).join("");
+  // 来源平台（内置 + 自动发现）
+  const plats = await api("/api/platforms");
+  $("#s-platforms").innerHTML = plats.platforms.map((p) => `<span class="tag tag-off">${esc(p)}</span>`).join("") || '<span class="empty">暂无</span>';
   loadBotStatus();
 }
 $("#save-settings").addEventListener("click", async () => {

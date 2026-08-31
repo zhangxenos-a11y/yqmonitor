@@ -360,6 +360,14 @@ async def sources(user=Depends(get_current_user)):
     return {k: v["name"] for k, v in ENGINES.items()}
 
 
+@app.get("/api/platforms")
+async def platforms(user=Depends(get_current_user)):
+    """已知来源平台（内置 + 运行时自动发现）。"""
+    from .search import known_platforms
+
+    return {"platforms": known_platforms()}
+
+
 # ---------- 静态前端 ----------
 @app.get("/")
 async def index():
