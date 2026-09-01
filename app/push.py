@@ -342,6 +342,15 @@ def push_findings(keyword: str, findings):
     return res, len(keep)
 
 
+def push_single(keyword: str, finding: dict):
+    """推送单条舆情（调用方已确认级别符合推送标准），返回 (result, 实际推送条数)。"""
+    channels = get_channels(enabled_only=True)
+    if not channels:
+        return {"ok": False, "error": "未配置任何推送终端"}, 0
+    res = _push_all_channels(channels, keyword, [finding])
+    return res, 1 if res.get("ok") else 0
+
+
 def push_digest(items_by_keyword: dict):
     """定时汇总推送：items_by_keyword = {关键词: [findings...]}。返回 (result, 推送条数)。"""
     channels = get_channels(enabled_only=True)

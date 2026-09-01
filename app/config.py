@@ -62,7 +62,8 @@ class Config:
         if s.strip()
     ]
     PUSH_BATCH_SIZE = int(os.getenv("PUSH_BATCH_SIZE", "5"))
-    PUSH_MIN_LEVEL = os.getenv("PUSH_MIN_LEVEL", "")  # 空=全部推送；否则只推 >= 该级别
+    # 默认只推「重大」及以上（重大问题）；空值归一化为「重大」，避免全推
+    PUSH_MIN_LEVEL = os.getenv("PUSH_MIN_LEVEL", "重大") or "重大"
 
     DEFAULT_ADMIN = os.getenv("DEFAULT_ADMIN", "admin")
     DEFAULT_PASSWORD = os.getenv("DEFAULT_PASSWORD", "admin123")

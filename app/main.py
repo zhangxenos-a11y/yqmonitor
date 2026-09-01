@@ -144,8 +144,8 @@ async def toggle_keyword(kid: int, user=Depends(get_current_user)):
 # ---------- 舆情级别标注 ----------
 @app.post("/api/results/{rid}/level")
 async def set_level(rid: int, request: Request, user=Depends(get_current_user)):
-    """人工标注舆情级别（一般/较大/重大/特别重大）。"""
-    from .levels import LEVELS
+    """人工标注舆情级别（一般/较大/重大/特别重大）。标注重大问题（重大/特别重大）且未推送时立即推送。"""
+    from .levels import LEVELS, level_weight
 
     row = query_one("SELECT id FROM results WHERE id=?", (rid,))
     if not row:
@@ -161,7 +161,26 @@ async def set_level(rid: int, request: Request, user=Depends(get_current_user)):
         "UPDATE results SET level=?, level_note=?, suppressed=? WHERE id=?",
         (level, note, suppressed, rid),
     )
-    return {"ok": True, "level": level, "suppressed": suppressed}
+    # 重大问题（重大/特别重大）且尚未推送 → 立即推送
+    pushed_now = 0
+    if level_weight(level) >= level_weight("重大"):
+        full = query_one(
+            "SELECT r.*, k.keyword FROM results r LEFT JOIN keywords k ON k.id=r.keyword_id WHERE r.id=?",
+            (rid,),
+        )
+        if full and not full["pushed"]:
+            from .push import push_single
+
+            item = dict(full)
+            res, n = push_single(item.get("keyword") or "", item)
+            if n:
+                execute("UPDATE results SET pushed=1 WHERE id=?", (rid,))
+                execute(
+                    "INSERT INTO push_log(keyword_id,result_ids,channel,status,message) VALUES(?,?,?,?,?)",
+                    (full["keyword_id"] or 0, str(rid), "wecom", "ok" if res.get("ok") else "fail", res.get("error", "")),
+                )
+                pushed_now = 1
+    return {"ok": True, "level": level, "suppressed": suppressed, "pushed": pushed_now}
 
 
 # ---------- 监测结果 ----------
@@ -281,7 +300,7 @@ async def get_settings(user=Depends(get_current_user)):
         "push_window_end": s.get("push_window_end", config.PUSH_WINDOW_END),
         "push_fields": [x for x in (s.get("push_fields", ",".join(config.PUSH_FIELDS)).split(",")) if x],
         "push_batch_size": int(s.get("push_batch_size", config.PUSH_BATCH_SIZE)),
-        "push_min_level": s.get("push_min_level", config.PUSH_MIN_LEVEL),
+        "push_min_level": s.get("push_min_level") or config.PUSH_MIN_LEVEL,
         # 扫描时间窗口
         "scan_window_start": s.get("scan_window_start", config.SCAN_WINDOW_START),
         "scan_window_end": s.get("scan_window_end", config.SCAN_WINDOW_END),
@@ -316,7 +335,7 @@ async def save_settings(request: Request, user=Depends(get_current_user)):
     config.PUSH_WINDOW_END = m.get("push_window_end", "")
     config.PUSH_FIELDS = [x for x in m.get("push_fields", ",".join(config.PUSH_FIELDS)).split(",") if x]
     config.PUSH_BATCH_SIZE = int(m.get("push_batch_size", config.PUSH_BATCH_SIZE))
-    config.PUSH_MIN_LEVEL = m.get("push_min_level", config.PUSH_MIN_LEVEL)
+    config.PUSH_MIN_LEVEL = m.get("push_min_level") or "重大"
     config.SCAN_WINDOW_START = m.get("scan_window_start", "")
     config.SCAN_WINDOW_END = m.get("scan_window_end", "")
     # 间隔变更即时生效

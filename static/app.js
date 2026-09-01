@@ -226,7 +226,7 @@ async function loadSettings() {
   $("#s-push-wstart").value = s.push_window_start || "";
   $("#s-push-wend").value = s.push_window_end || "";
   $("#s-push-batch").value = s.push_batch_size || 5;
-  $("#s-push-minlevel").value = s.push_min_level || "";
+  $("#s-push-minlevel").value = s.push_min_level || "重大";
   $("#s-scan-wstart").value = s.scan_window_start || "";
   $("#s-scan-wend").value = s.scan_window_end || "";
   const pf = new Set(s.push_fields);
