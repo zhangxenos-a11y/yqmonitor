@@ -155,8 +155,13 @@ async def set_level(rid: int, request: Request, user=Depends(get_current_user)):
     if level not in LEVELS:
         raise HTTPException(status_code=400, detail=f"级别必须是 {('/').join(LEVELS)} 之一")
     note = (body.get("note") or "").strip()
-    execute("UPDATE results SET level=?, level_note=? WHERE id=?", (level, note, rid))
-    return {"ok": True, "level": level}
+    # 人工标注为「一般」= 已处理、不再推送；标注为较高级别则恢复可推送
+    suppressed = 1 if level == "一般" else 0
+    execute(
+        "UPDATE results SET level=?, level_note=?, suppressed=? WHERE id=?",
+        (level, note, suppressed, rid),
+    )
+    return {"ok": True, "level": level, "suppressed": suppressed}
 
 
 # ---------- 监测结果 ----------

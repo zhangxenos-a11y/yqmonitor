@@ -87,7 +87,9 @@ const LEVEL_TAG = { "一般": "lv1", "较大": "lv2", "重大": "lv3", "特别�
 
 function resultRow(r) {
   const tag = SENT[r.sentiment] || "neu";
-  const pushed = r.pushed ? '<span class="tag tag-pos">已推送</span>' : '<span class="tag tag-off">未推送</span>';
+  const pushed = r.suppressed
+    ? '<span class="tag tag-lv2">已免推</span>'
+    : (r.pushed ? '<span class="tag tag-pos">已推送</span>' : '<span class="tag tag-off">未推送</span>');
   const lv = r.level || "一般";
   const levelSel = `<select class="level-select" onchange="setLevel(${r.id}, this.value)">
     ${LEVELS.map((l) => `<option value="${l}" ${l === lv ? "selected" : ""}>${l}</option>`).join("")}

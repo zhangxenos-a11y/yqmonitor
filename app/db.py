@@ -42,7 +42,8 @@ CREATE TABLE IF NOT EXISTS results (
     level_note TEXT,
     publish_time TEXT,
     found_at TEXT DEFAULT (datetime('now','localtime')),
-    pushed INTEGER DEFAULT 0
+    pushed INTEGER DEFAULT 0,
+    suppressed INTEGER DEFAULT 0
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_results_dedup ON results(keyword_id, url_hash);
 CREATE INDEX IF NOT EXISTS idx_results_sentiment ON results(sentiment);
@@ -107,6 +108,8 @@ def _migrate(db: sqlite3.Connection) -> None:
         db.execute("ALTER TABLE results ADD COLUMN level TEXT DEFAULT '一般'")
     if "level_note" not in cols:
         db.execute("ALTER TABLE results ADD COLUMN level_note TEXT")
+    if "suppressed" not in cols:
+        db.execute("ALTER TABLE results ADD COLUMN suppressed INTEGER DEFAULT 0")
     db.commit()
 
 

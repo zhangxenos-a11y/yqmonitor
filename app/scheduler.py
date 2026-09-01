@@ -158,7 +158,7 @@ def run_digest() -> dict:
         """SELECT r.id, r.title, r.url, r.snippet, r.source_platform,
                   r.sentiment, r.level, k.keyword
            FROM results r LEFT JOIN keywords k ON k.id=r.keyword_id
-           WHERE r.pushed=0 ORDER BY r.id ASC"""
+           WHERE r.pushed=0 AND r.suppressed=0 ORDER BY r.id ASC"""
     )
     if not rows:
         log.info("定时汇总：无待推送舆情")
